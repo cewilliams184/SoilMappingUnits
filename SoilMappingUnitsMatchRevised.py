@@ -13,23 +13,23 @@
 import sys, arcpy, os,csv
 arcpy.env.overwriteOutput = True
 
-''''#Set workspace
+#Set workspace
 workplace = arcpy.env.workspace =arcpy.GetParameterAsText(0)
 
 #User inputs; get parameter
 SiteBoundary =arcpy.GetParameterAsText(1)
 Soils= arcpy.GetParameterAsText(2)#NRCS Soils in county(s) of interest
 SoilsAttributes =  arcpy.GetParameterAsText(3) #muaggatt text file
-Soilsfile= arcpy.GetParameterAsText(4) #path to output csv file'''
+Soilsfile= arcpy.GetParameterAsText(4) #path to output csv file
 
 
-#Set workspace
+'''#Set workspace
 workplace = arcpy.env.workspace ='C:/CodingProjects/SoilMappingUnits/Soils.gdb/stplnft_NC'
 #User inputs
 SiteBoundary ='C:/CodingProjects/SoilMappingUnits/Soils.gdb/stplnft_NC/SiteBoundary'
 Soils= 'C:/GIS/NC/County/Wake/Soils/NRCS/wss_SSA_NC183_soildb_NC_2003_[2019-09-16]/NC183/spatial/soilmu_a_nc183.shp'
 SoilsAttributes = 'C:/GIS/NC/County/Wake/Soils/NRCS/wss_SSA_NC183_soildb_NC_2003_[2019-09-16]/NC183/tabular/muaggatt.txt'
-Soilsfile= 'C:/CodingProjects/SoilMappingUnits'
+Soilsfile= 'C:/CodingProjects/SoilMappingUnits'''
 
 #Define Function printArc; which shows message in Interactive Window and IDE
 def printArc(message):
