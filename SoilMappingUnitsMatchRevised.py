@@ -12,112 +12,117 @@
 import arcpy
 import os
 import csv
-
-arcpy.env.overwriteOutput = True
-
-# Set workspace
-workplace = arcpy.env.workspace = arcpy.GetParameterAsText(0)
-
-# User inputs; get parameter
-SiteBoundary = arcpy.GetParameterAsText(1)
-Soils = arcpy.GetParameterAsText(2)  # NRCS Soils in county(s) of interest
-SoilsAttributes = arcpy.GetParameterAsText(3)  # muaggatt text file
-Soilsfile = arcpy.GetParameterAsText(4)  # path to output csv file
-
-'''#Set workspace
-workplace = arcpy.env.workspace ='C:/CodingProjects/SoilMappingUnits/Soils.gdb/stplnft_NC'
-#User inputs
-SiteBoundary ='C:/CodingProjects/SoilMappingUnits/Soils.gdb/stplnft_NC/SiteBoundary'
-Soils= 'C:/GIS/NC/County/Wake/Soils/NRCS/wss_SSA_NC183_soildb_NC_2003_[2019-09-16]/NC183/spatial/soilmu_a_nc183.shp'
-SoilsAttributes = 'C:/GIS/NC/County/Wake/Soils/NRCS/wss_SSA_NC183_soildb_NC_2003_[2019-09-16]/NC183/tabular/muaggatt.txt'
-Soilsfile= 'C:/CodingProjects/SoilMappingUnits'''
+import constants as cn
 
 
-# Define Function printArc; which shows message in Interactive Window and IDE
-def printArc(message):
-    '''Print message for Script Tool and standard output'''
+def print_arc(message):
+    """Print message for Script Tool and standard output"""
     print message
     arcpy.AddMessage(message)
 
 
-# Define Function convert muaggatt.txt to csv file
-def NRCSTabularConverter(Muaggatt, SoilsFileOut, Work_Place):
-    '''Converts NRCS Soils muaggatt tabular data to a csv file; creates an output file containing soils found in the
-        specified area of interest with soils descriptions in the attribute table.'''
-    # Define outputs
-    soilsOut = os.path.join(SoilsFileOut, 'soilsOut.csv')  # output csv file
+class SoilMappingUnitsDetails:
+    def __init__(self,
+                 work_place=cn.workplace,
+                 site_boundary = cn.SiteBoundary,
+                 soils=cn.Soils,
+                 soil_attributes=cn.SoilsAttributes,
+                 output_csv_file=cn.Soilsfile,
+                 soil_output_filename=cn.soil_output_filename
+                 ):
 
-    # Text file with soils attributes downloaded from NRCS Soils site (muname.txt?)
-    CountySoilsDescr = os.path.join(str(Work_Place)[:-11],
-                                    'CountySoilsDescr')  # table to be created in gdb with soil in county of interest joined with the soil descriptions
+        self.work_place = work_place
+        self.site_boundary = site_boundary
+        self.soils = soils
+        self.soil_attributes = soil_attributes
+        self.output_csv_file = output_csv_file
+        self.soil_output_filename = soil_output_filename
 
-    # convert muaggatt.txt to csv file to perform join on SoilsInBoundary File
-    fields = ['OID', 'MUSYM', 'DESCRIPTION']
-    DictSoilInBound = {}  # create dictionary to reduce duplicates in musysm in output file
-    with open(Muaggatt, "r") as infile:  # read text file
-        with open(soilsOut, "w") as output:  # write text to file soilsOut.csv
-            writer = csv.writer(output, lineterminator='\n')
-            writer.writerow(fields)  # writes header containing a list of fields
-            OID = 'ObjectID'
-            ObjectID = 0
-            for line in infile:
-                # String to list of strings
-                lineList = line.split('|')
-                # First column in musymbols.
-                MuColumn = [str(i) for i in lineList]
-                MUSYM = MuColumn[0].replace('"', '')
-                Description = MuColumn[1].replace(',', '')
-                SoilLine = str(str(
-                    ObjectID) + "," + MUSYM + "," + Description + '\n')  # concatenate MUSYM and Description with "," so they are in  seperate columns. 'Description.replace() is used to keep description in same column.
-                if DictSoilInBound.get(MUSYM) is not None:
-                    print str(MUSYM) + "is already in Dictionary"
-                else:
-                    output.writelines(SoilLine)
-                ObjectID = ObjectID + 1
+    def initialize_soil_mapping_unit_details(self):
+        self.set_up_workspace()
+        self.nrcs_tabular_converter()
+        self.import_csv_to_geodatabase()
+        self.extract_soils_in_site_boundary()
+        self.match_soils_with_descriptions()
 
-        output.close()
-        printArc('muaggatt.txt converted to csv.')
-    infile.close()
-    # import csv to gdb
-    arcpy.TableToTable_conversion(soilsOut, str(workplace)[:-11], 'CountySoilsDescr')
-    printArc('muaggatt.tx has been converted to a .csv file')
+    def execute_soil_mapping_units_details(self):
+        self.initialize_soil_mapping_unit_details()
+
+    def set_up_workspace(self):
+        arcpy.env.overwriteOutput = True
+        arcpy.env.workspace = self.work_place
+
+    def nrcs_tabular_converter(self):
+        """Converts NRCS Soils muaggatt tabular data to a csv file; creates an output file containing soils found in the
+            specified area of interest with soils descriptions in the attribute table."""
+
+        # convert muaggatt.txt to csv file to perform join on SoilsInBoundary File
+        dictionary_soil_in_boundary = {}  # create dictionary to reduce duplicates in musysm in output file
+        with open(self.soil_attributes, "r") as input_file:  # read text file
+            with open(os.path.join(self.output_csv_file, self.soil_output_filename), "w") as output:
+                csv.writer(output, lineterminator='\n').writerow(['OID', 'MUSYM', 'DESCRIPTION'])
+                # oid = 'ObjectID'
+                object_id = 0
+                for line in input_file:
+                    # First column in musymbols.
+                    musym = [str(i) for i in line.split('|')][0].replace('"', '')
+                    soil_line = str(
+                        str(object_id) + "," + musym + "," + [str(i) for i in line.split('|')][1].replace(',',
+                                                                                                          '') + '\n')  # concatenate MUSYM and Description with "," so they are in  seperate columns. 'Description.replace() is used to keep description in same column.
+                    if dictionary_soil_in_boundary.get(musym) is not None:
+                        print str(musym) + "is already in Dictionary"
+                    else:
+                        output.writelines(soil_line)
+                    object_id += 1
+
+            output.close()
+            print_arc('muaggatt.txt converted to csv.')
+        input_file.close()
+
+    def import_csv_to_geodatabase(self):
+        # import csv to gdb
+        arcpy.TableToTable_conversion(os.path.join(self.output_csv_file, self.soil_output_filename),
+                                      str(self.work_place)[:-11], 'CountySoilsDescr')
+        print_arc('muaggatt.tx has been converted to a .csv file')
+
+    def extract_soils_in_site_boundary(self):
+        """ select soils that intersect with site boundary and save to a new featureclass """
+        # Make a layer and select soils which overlap site boundary with the Select By Location tool
+        arcpy.MakeFeatureLayer_management(self.soils, 'Soils_lyr')
+        arcpy.SelectLayerByLocation_management('Soils_lyr', 'intersect', self.site_boundary)
+
+        # Export selected features from Soils layer to new feature class
+        arcpy.CopyFeatures_management('Soils_lyr', os.path.join(self.work_place,
+                                                                'SoilsInBoundary'))  # copyfeature to workplace (gdb)
+
+    def match_soils_with_descriptions(self):
+        # Define outputs
+        SoilsWithAttributes = os.path.join(self.work_place,
+                                           'SoilsWithAttributes')
+        # Match soils with attribute description text file
+        with arcpy.da.SearchCursor(os.path.join(str(self.work_place)[:-11], 'CountySoilsDescriptions'),
+                                   'MUSYM') as SoilInfile:
+            if self.soils.count(self.soils) == (os.path.join(str(self.work_place)[:-11], 'CountySoilsDescr').count(
+                    os.path.join(str(self.work_place)[:-11], 'CountySoilsDescriptions'))):
+                # Join musyms soils descriptions to Soils in boundary
+                soil_descriptions = arcpy.JoinField_management(os.path.join(self.work_place,
+                                                                            'SoilsInBoundary'), 'MUSYM',
+                                                               os.path.join(str(self.work_place)[:-11],
+                                                                            'CountySoilsDescriptions'), 'MUSYM')
+                # Export joined layer to new feature class
+                arcpy.FeatureClassToFeatureClass_conversion(soil_descriptions, self.work_place, 'SoilsWithAttributes')
+                # create csv with no duplicates of soils and soil descriptions found in site boundary for soils legend
+                soils_legend = os.path.join(self.output_csv_file, 'soils_legend.xls')  # excel table for soils legend
+                # Exports SoilsWithAttributes to an Excel file
+                arcpy.TableToExcel_conversion(os.path.join(self.work_place,
+                                                           'SoilsInBoundary'), soils_legend)
+                print_arc("Soil Descriptions with no duplicated has been created")
 
 
-# Make a layer and select soils which overlap site boundary with the Select By Location tool
-arcpy.MakeFeatureLayer_management(Soils, 'Soils_lyr')
-arcpy.SelectLayerByLocation_management('Soils_lyr', 'intersect', SiteBoundary)
+def main():
+    SMD = SoilMappingUnitsDetails()
+    SMD.execute_soil_mapping_units_details()
 
-# Export selected features from Soils layer to new feature class
-SoilsInBoundary = os.path.join(workplace, 'SoilsInBoundary')  # Determine the new output feature class path and name
-arcpy.CopyFeatures_management('Soils_lyr', SoilsInBoundary)  # copyfeature to workplace (gdb)
 
-# run table converter function converting muaggatt txt file to a csv file
-NRCSTabularConverter(SoilsAttributes, Soilsfile, workplace)
-
-# Define outputs
-SoilsWithAttributes = os.path.join(workplace,
-                                   'SoilsWithAttributes')  # outfile of soils in boundary with descriptions in attributes
-SoilMuDescriptions = os.path.join(workplace, 'SoilMuDescriptions')  # csv of soils in boundary with descriptions
-soilsOut = os.path.join(Soilsfile, 'soilsOut.csv')  # output csv file
-
-# Text file with soils attributes downloaded from NRCS Soils site (muname.txt?)
-CountySoilsDescr = os.path.join(str(workplace)[:-11],
-                                'CountySoilsDescr')  # table to be created in gdb with soil in county of interest joined with the soil descriptions
-
-# Match soils with attribute description text file
-soilscount = Soils.count(Soils)  # count number of soil files entered
-soilsAttrCount = (CountySoilsDescr.count(CountySoilsDescr))  # count number of soil attribute files entered
-SoilsJoined = os.path.join(str(workplace)[:-11], 'CountySoilsDescr')
-with arcpy.da.SearchCursor(SoilsJoined, 'MUSYM') as SoilInfile:
-    if soilscount == soilsAttrCount:  # check if number of soil files entered match number of soils attribute text files entered
-        # Join musyms soils descriptions to Soils in boundary
-        SoilDescriptions = arcpy.JoinField_management(SoilsInBoundary, 'MUSYM', CountySoilsDescr, 'MUSYM')
-        # Export joined layer to new feature class
-        SoilsWithAttributes = arcpy.FeatureClassToFeatureClass_conversion(SoilDescriptions, workplace,
-                                                                          'SoilsWithAttributes')
-        # create csv with no duplicates of soils and soil descriptions found in site boundary for soils legend
-        SoilsLegend = os.path.join(Soilsfile, 'SoilsLegend.xls')  # excel table for soils legend
-        # Exports SoilsWithAttributes to an excel file
-        arcpy.TableToExcel_conversion(SoilsInBoundary, SoilsLegend)
-        printArc("Soil Descriptions with no duplicated has been created")
-
+if __name__ == "__main__":
+    main()
